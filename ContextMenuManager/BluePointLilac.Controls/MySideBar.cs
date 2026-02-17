@@ -13,7 +13,7 @@ namespace BluePointLilac.Controls
         private string[] itemNames;
         private int itemHeight = 36, selectIndex = -1, hoverIndex = -1;
         private int animTarget = -1, animCurrent = -1;
-        private float animProgress = 0f, curSelTop = -1;
+        private float animProgress = 0f, curSelTop = -itemHeight;
         private bool isAnimating = false;
 
         public Color SelectedGradientColor1 { get; set; } = Color.FromArgb(255, 195, 0);
@@ -75,7 +75,10 @@ namespace BluePointLilac.Controls
 
         public MySideBar()
         {
-            Dock = DockStyle.Left; MinimumSize = new Size(1, 1); BackgroundImageLayout = ImageLayout.None; DoubleBuffered = true;
+            Dock = DockStyle.Left;
+            MinimumSize = new Size(1, 1);
+            BackgroundImageLayout = ImageLayout.None;
+            DoubleBuffered = true;
             Font = new Font(SystemFonts.MenuFont.FontFamily, SystemFonts.MenuFont.Size + 1F);
             InitializeColors();
             SizeChanged += (s, e) => UpdateBackground();
@@ -86,7 +89,7 @@ namespace BluePointLilac.Controls
                 else
                 {
                     float t = 1 - (float)Math.Pow(1 - animProgress, 3);
-                    float start = TopSpace + animCurrent * ItemHeight, target = TopSpace + animTarget * ItemHeight;
+                    float start = TopSpace + animCurrent * (float)ItemHeight, target = TopSpace + animTarget * (float)ItemHeight;
                     curSelTop = Math.Max(0, Math.Min(start + (target - start) * t, Height - ItemHeight));
                     Invalidate();
                 }
@@ -148,7 +151,7 @@ namespace BluePointLilac.Controls
                     else if (ItemNames[i].Length > 0) g.DrawString(ItemNames[i], Font, tb, HorizontalSpace, TopSpace + i * ItemHeight + vSpace);
                 }
             }
-            catch { BackgroundImage?.Dispose(); BackgroundImage = null; }
+            catch (ArgumentException) { BackgroundImage?.Dispose(); BackgroundImage = null; }
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -171,7 +174,11 @@ namespace BluePointLilac.Controls
                 e.Graphics.DrawString(ItemNames[idx], Font, fb, HorizontalSpace, y + vSpace);
             }
 
-            if (hoverIndex >= 0 && hoverIndex != selectIndex) DrawItem(hoverIndex, HoveredBackColor, HoveredForeColor, TopSpace + hoverIndex * ItemHeight);
+            if (hoverIndex >= 0 && hoverIndex != selectIndex)
+            {
+                float hoverY = TopSpace + (float)hoverIndex * ItemHeight;
+                DrawItem(hoverIndex, HoveredBackColor, HoveredForeColor, hoverY);
+            }
             if (selectIndex >= 0) DrawItem(selectIndex, Color.Transparent, SelectedForeColor, curSelTop);
             using (var p = new Pen(SeparatorColor)) e.Graphics.DrawLine(p, Width - 1, 0, Width - 1, Height);
         }

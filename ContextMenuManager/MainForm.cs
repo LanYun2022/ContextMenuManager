@@ -58,14 +58,17 @@ namespace ContextMenuManager
             ResizeSideBar();
             JumpItem(0, 0);
 
-            shellList.ItemsLoaded += (sender, e) =>
+            shellList.ItemsLoaded -= ShellList_ItemsLoaded;
+            shellList.ItemsLoaded += ShellList_ItemsLoaded;
+        }
+
+        private void ShellList_ItemsLoaded(object sender, EventArgs e)
+        {
+            if (currentListControl == shellList)
             {
-                if (currentListControl == shellList)
-                {
-                    SaveOriginalListItems();
-                    if (!string.IsNullOrEmpty(searchBox.Text)) FilterItems(searchBox.Text);
-                }
-            };
+                SaveOriginalListItems();
+                if (!string.IsNullOrEmpty(searchBox.Text)) FilterItems(searchBox.Text);
+            }
         }
 
         private readonly MyToolBarButton[] ToolBarButtons =
