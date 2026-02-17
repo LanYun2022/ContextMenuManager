@@ -13,7 +13,7 @@ namespace BluePointLilac.Controls
         private string[] itemNames;
         private int itemHeight = 36, selectIndex = -1, hoverIndex = -1;
         private int animTarget = -1, animCurrent = -1;
-        private float animProgress = 0f, curSelTop = -itemHeight;
+        private float animProgress = 0f, curSelTop = -36;
         private bool isAnimating = false;
 
         public Color SelectedGradientColor1 { get; set; } = Color.FromArgb(255, 195, 0);
