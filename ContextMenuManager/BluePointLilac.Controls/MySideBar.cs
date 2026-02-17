@@ -3,18 +3,21 @@ using System;
 using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace BluePointLilac.Controls
 {
     public sealed class MySideBar : Panel
     {
+        private const float AnimationSpeed = 0.25f;
         private readonly Timer animTimer = new() { Interval = 16 };
         private string[] itemNames;
         private int itemHeight = 36, selectIndex = -1, hoverIndex = -1;
         private int animTarget = -1, animCurrent = -1;
         private float animProgress = 0f, curSelTop = -36;
         private bool isAnimating = false;
+        private Font ownedFont;
 
         public Color SelectedGradientColor1 { get; set; } = Color.FromArgb(255, 195, 0);
         public Color SelectedGradientColor2 { get; set; } = Color.FromArgb(255, 141, 26);
@@ -46,8 +49,10 @@ namespace BluePointLilac.Controls
                 itemNames = value;
                 if (value != null && !IsFixedWidth)
                 {
-                    var maxW = 0;
-                    foreach (var s in value) if (s != null) maxW = Math.Max(maxW, TextRenderer.MeasureText(s, Font).Width);
+                    var maxW = value.Where(s => s != null)
+                        .Select(s => TextRenderer.MeasureText(s, Font).Width)
+                        .DefaultIfEmpty(0)
+                        .Max();
                     Width = maxW + 2 * HorizontalSpace;
                 }
                 UpdateBackground();
@@ -70,8 +75,24 @@ namespace BluePointLilac.Controls
         public int HoveredIndex
         {
             get => hoverIndex;
-            set { if (hoverIndex != value) { hoverIndex = value; Invalidate(); HoverIndexChanged?.Invoke(this, EventArgs.Empty); } }
+            set
+            {
+                if (hoverIndex == value) return;
+                int oldIdx = hoverIndex;
+                hoverIndex = value;
+                InvalidateItem(oldIdx);
+                InvalidateItem(hoverIndex);
+                HoverIndexChanged?.Invoke(this, EventArgs.Empty);
+            }
         }
+
+        private Rectangle GetItemRect(int idx)
+        {
+            if (idx < 0 || ItemNames == null || idx >= ItemNames.Length) return Rectangle.Empty;
+            return new Rectangle(0, TopSpace + idx * ItemHeight, Width, ItemHeight);
+        }
+
+        private void InvalidateItem(int idx) => Invalidate(GetItemRect(idx));
 
         public MySideBar()
         {
@@ -79,21 +100,11 @@ namespace BluePointLilac.Controls
             MinimumSize = new Size(1, 1);
             BackgroundImageLayout = ImageLayout.None;
             DoubleBuffered = true;
-            Font = new Font(SystemFonts.MenuFont.FontFamily, SystemFonts.MenuFont.Size + 1F);
+            ownedFont = new Font(SystemFonts.MenuFont.FontFamily, SystemFonts.MenuFont.Size + 1F);
+            Font = ownedFont;
             InitializeColors();
             SizeChanged += (s, e) => UpdateBackground();
-            animTimer.Tick += (s, e) =>
-            {
-                animProgress += 0.25f;
-                if (animProgress >= 1f) { isAnimating = false; animTimer.Stop(); SetSelectedIndexDirectly(animTarget); }
-                else
-                {
-                    float t = 1 - (float)Math.Pow(1 - animProgress, 3);
-                    float start = TopSpace + animCurrent * (float)ItemHeight, target = TopSpace + animTarget * (float)ItemHeight;
-                    curSelTop = Math.Max(0, Math.Min(start + (target - start) * t, Height - ItemHeight));
-                    Invalidate();
-                }
-            };
+            animTimer.Tick += AnimationTimer_Tick;
             DarkModeHelper.ThemeChanged += OnThemeChanged;
             SelectedIndex = -1;
         }
@@ -109,6 +120,44 @@ namespace BluePointLilac.Controls
             BackgroundGradientColor3 = DarkModeHelper.ToolBarGradientBottom;
         }
 
+        private void AnimationTimer_Tick(object sender, EventArgs e)
+        {
+            animProgress += AnimationSpeed;
+            if (animProgress >= 1f)
+                CompleteAnimation();
+            else
+                UpdateAnimationFrame();
+        }
+
+        private void UpdateAnimationFrame()
+        {
+            float easedProgress = CalculateEasedProgress(animProgress);
+            float startY = TopSpace + animCurrent * (float)ItemHeight;
+            float targetY = TopSpace + animTarget * (float)ItemHeight;
+            float oldTop = curSelTop;
+            curSelTop = Math.Max(0, Math.Min(startY + (targetY - startY) * easedProgress, Height - ItemHeight));
+            InvalidateAnimationRegion(oldTop, curSelTop);
+        }
+
+        private void CompleteAnimation()
+        {
+            isAnimating = false;
+            animTimer.Stop();
+            SetSelectedIndexDirectly(animTarget);
+        }
+
+        private static float CalculateEasedProgress(float progress)
+        {
+            return 1 - (float)Math.Pow(1 - progress, 3);
+        }
+
+        private void InvalidateAnimationRegion(float oldTop, float newTop)
+        {
+            int minY = Math.Max(0, (int)Math.Min(oldTop, newTop));
+            int maxY = (int)Math.Max(oldTop, newTop) + ItemHeight;
+            Invalidate(new Rectangle(0, minY, Width, maxY - minY));
+        }
+
         private void StartAnimation(int from, int to)
         {
             animCurrent = from; animTarget = to; animProgress = 0f; isAnimating = true;
@@ -117,9 +166,13 @@ namespace BluePointLilac.Controls
 
         private void SetSelectedIndexDirectly(int val)
         {
+            int oldIdx = selectIndex;
             selectIndex = val;
             curSelTop = (val >= 0 && ItemNames != null && val < ItemNames.Length) ? TopSpace + val * ItemHeight : -ItemHeight;
-            HoveredIndex = val; Invalidate(); SelectIndexChanged?.Invoke(this, EventArgs.Empty);
+            InvalidateItem(oldIdx);
+            InvalidateItem(val);
+            HoveredIndex = val;
+            SelectIndexChanged?.Invoke(this, EventArgs.Empty);
         }
 
         public void StopAnimation() { if (isAnimating) { animTimer.Stop(); isAnimating = false; SetSelectedIndexDirectly(animTarget); } }
@@ -140,18 +193,44 @@ namespace BluePointLilac.Controls
             {
                 var old = BackgroundImage; BackgroundImage = new Bitmap(w, h); old?.Dispose();
                 using var g = Graphics.FromImage(BackgroundImage);
-                using (var b = new LinearGradientBrush(new Rectangle(0, 0, w, h), Color.Empty, Color.Empty, 0f) { InterpolationColors = new ColorBlend { Colors = new[] { BackgroundGradientColor1, BackgroundGradientColor2, BackgroundGradientColor3 }, Positions = new[] { 0f, 0.5f, 1f } } })
-                    g.FillRectangle(b, new Rectangle(0, 0, w, h));
-                
-                using var tb = new SolidBrush(ForeColor); using var p = new Pen(SeparatorColor);
-                float vSpace = (ItemHeight - TextRenderer.MeasureText(" ", Font).Height) * 0.5f;
-                for (int i = 0; i < ItemNames.Length; i++)
-                {
-                    if (ItemNames[i] == null) g.DrawLine(p, HorizontalSpace, TopSpace + (i + 0.5f) * ItemHeight, Width - HorizontalSpace, TopSpace + (i + 0.5f) * ItemHeight);
-                    else if (ItemNames[i].Length > 0) g.DrawString(ItemNames[i], Font, tb, HorizontalSpace, TopSpace + i * ItemHeight + vSpace);
-                }
+                DrawBackgroundGradient(g, w, h);
+                DrawTextItemsAndSeparators(g);
             }
             catch (ArgumentException) { BackgroundImage?.Dispose(); BackgroundImage = null; }
+        }
+
+        private void DrawBackgroundGradient(Graphics g, int w, int h)
+        {
+            using var b = new LinearGradientBrush(new Rectangle(0, 0, w, h), Color.Empty, Color.Empty, 0f)
+            {
+                InterpolationColors = new ColorBlend
+                {
+                    Colors = new[] { BackgroundGradientColor1, BackgroundGradientColor2, BackgroundGradientColor3 },
+                    Positions = new[] { 0f, 0.5f, 1f }
+                }
+            };
+            g.FillRectangle(b, new Rectangle(0, 0, w, h));
+        }
+
+        private void DrawTextItemsAndSeparators(Graphics g)
+        {
+            using var textBrush = new SolidBrush(ForeColor);
+            using var separatorPen = new Pen(SeparatorColor);
+            float vSpace = (ItemHeight - TextRenderer.MeasureText(" ", Font).Height) * 0.5f;
+            for (int i = 0; i < ItemNames.Length; i++)
+            {
+                float y = TopSpace + i * ItemHeight;
+                if (ItemNames[i] == null)
+                    DrawSeparator(g, separatorPen, i);
+                else if (ItemNames[i].Length > 0)
+                    g.DrawString(ItemNames[i], Font, textBrush, HorizontalSpace, y + vSpace);
+            }
+        }
+
+        private void DrawSeparator(Graphics g, Pen pen, int index)
+        {
+            float y = TopSpace + (index + 0.5f) * ItemHeight;
+            g.DrawLine(pen, HorizontalSpace, y, Width - HorizontalSpace, y);
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -161,7 +240,7 @@ namespace BluePointLilac.Controls
             float vSpace = (ItemHeight - TextRenderer.MeasureText(" ", Font).Height) * 0.5f;
             void DrawItem(int idx, Color back, Color fore, float y)
             {
-                if (idx < 0 || idx >= ItemNames.Length) return;
+                if (idx < 0 || idx >= ItemNames.Length || string.IsNullOrEmpty(ItemNames[idx])) return;
                 var r = new RectangleF(0, y, Width, ItemHeight);
                 if (back == Color.Transparent)
                 {
@@ -208,6 +287,6 @@ namespace BluePointLilac.Controls
         protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); HoveredIndex = SelectedIndex; }
         protected override void OnBackColorChanged(EventArgs e) { base.OnBackColorChanged(e); InitializeColors(); UpdateBackground(); }
         protected override void SetBoundsCore(int x, int y, int w, int h, BoundsSpecified s) => base.SetBoundsCore(x, y, Math.Max(1, w), Math.Max(1, h), s);
-        protected override void Dispose(bool disposing) { if (disposing) { DarkModeHelper.ThemeChanged -= OnThemeChanged; animTimer?.Dispose(); Font?.Dispose(); } base.Dispose(disposing); }
+        protected override void Dispose(bool disposing) { if (disposing) { DarkModeHelper.ThemeChanged -= OnThemeChanged; animTimer?.Dispose(); ownedFont?.Dispose(); } base.Dispose(disposing); }
     }
 }
