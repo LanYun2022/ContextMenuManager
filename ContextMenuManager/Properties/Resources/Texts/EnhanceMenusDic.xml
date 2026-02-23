@@ -1223,30 +1223,34 @@ Tip属性为鼠标悬浮在开关上时的提示信息，从每个Item节点开�
               <Item0>
                 <Value>
                   <REG_SZ MUIVerb='禁止入站' Icon='imageres.dll,-105'/>
-                  <REG_SZ MUIVerb='Not Allow In'>
+                  <REG_SZ MUIVerb='Block In'>
                     <Culture>en-US</Culture>
                   </REG_SZ>
                 </Value>
                 <SubKey>
                   <Command>
                     <ShellExecute Verb='runas' WindowStyle='0'/>
-                    <FileName>cmd.exe</FileName>
-                    <Arguments>/R (netsh advfirewall firewall delete rule name="_%1" dir=in program="%1" &amp; netsh advfirewall firewall add rule name="_%1" dir=in program="%1" action=block)</Arguments>
+                    <FileName>powershell.exe</FileName>
+                    <Arguments>
+						Get-NetFirewallRule -DisplayName '_%1' | Where-Object { ($_ | Get-NetFirewallApplicationFilter).Program -eq '%1' -and $_.Direction -eq 'Inbound' } | Remove-NetFirewallRule; New-NetFirewallRule -DisplayName '_%1' -Program '%1' -Direction Inbound -Action Block
+					</Arguments>
                   </Command>
                 </SubKey>
               </Item0>
               <Item1>
                 <Value>
                   <REG_SZ MUIVerb='禁止出站' Icon='imageres.dll,-105'/>
-                  <REG_SZ MUIVerb='Not Allow Out'>
+                  <REG_SZ MUIVerb='Block Out'>
                     <Culture>en-US</Culture>
                   </REG_SZ>
                 </Value>
                 <SubKey>
                   <Command>
                     <ShellExecute Verb='runas' WindowStyle='0'/>
-                    <FileName>cmd.exe</FileName>
-                    <Arguments>/R (netsh advfirewall firewall delete rule name="_%1" dir=out program="%1" &amp; netsh advfirewall firewall add rule name="_%1" dir=out program="%1" action=block)</Arguments>
+                    <FileName>powershell.exe</FileName>
+                    <Arguments>
+						Get-NetFirewallRule -DisplayName '_%1' | Where-Object { ($_ | Get-NetFirewallApplicationFilter).Program -eq '%1' -and $_.Direction -eq 'Outbound' } | Remove-NetFirewallRule; New-NetFirewallRule -DisplayName '_%1' -Program '%1' -Direction Outbound -Action Block
+					</Arguments>
                   </Command>
                 </SubKey>
               </Item1>
@@ -1260,8 +1264,10 @@ Tip属性为鼠标悬浮在开关上时的提示信息，从每个Item节点开�
                 <SubKey>
                   <Command>
                     <ShellExecute Verb='runas' WindowStyle='0'/>
-                    <FileName>cmd.exe</FileName>
-                    <Arguments>/R (netsh advfirewall firewall delete rule name="_%1" dir=in program="%1" &amp; netsh advfirewall firewall add rule name="_%1" dir=in program="%1" action=allow)</Arguments>
+                    <FileName>powershell.exe</FileName>
+                    <Arguments>
+						Get-NetFirewallRule -DisplayName '_%1' | Where-Object { ($_ | Get-NetFirewallApplicationFilter).Program -eq '%1' -and $_.Direction -eq 'Inbound' } | Remove-NetFirewallRule; New-NetFirewallRule -DisplayName '_%1' -Program '%1' -Direction Inbound -Action Allow
+					</Arguments>
                   </Command>
                 </SubKey>
               </Item2>
@@ -1275,8 +1281,10 @@ Tip属性为鼠标悬浮在开关上时的提示信息，从每个Item节点开�
                 <SubKey>
                   <Command>
                     <ShellExecute Verb='runas' WindowStyle='0'/>
-                    <FileName>cmd.exe</FileName>
-                    <Arguments>/R (netsh advfirewall firewall delete rule name="_%1" dir=out program="%1" &amp; netsh advfirewall firewall add rule name="_%1" dir=out program="%1" action=allow)</Arguments>
+                    <FileName>powershell.exe</FileName>
+                    <Arguments>
+						Get-NetFirewallRule -DisplayName '_%1' | Where-Object { ($_ | Get-NetFirewallApplicationFilter).Program -eq '%1' -and $_.Direction -eq 'Outbound' } | Remove-NetFirewallRule; New-NetFirewallRule -DisplayName '_%1' -Program '%1' -Direction Outbound -Action Allow
+					</Arguments>
                   </Command>
                 </SubKey>
               </Item3>
@@ -1290,8 +1298,10 @@ Tip属性为鼠标悬浮在开关上时的提示信息，从每个Item节点开�
                 <SubKey>
                   <Command>
                     <ShellExecute Verb='runas' WindowStyle='0'/>
-                    <FileName>cmd.exe</FileName>
-                    <Arguments>/R (netsh advfirewall firewall delete rule name="_%1" program="%1")</Arguments>
+                    <FileName>powershell.exe</FileName>
+                    <Arguments>
+						Get-NetFirewallRule -DisplayName '_%1' | Where-Object { ($_ | Get-NetFirewallApplicationFilter).Program -eq '%1' } | Remove-NetFirewallRule
+					</Arguments>
                   </Command>
                 </SubKey>
               </Item4>
