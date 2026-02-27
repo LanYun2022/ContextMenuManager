@@ -9,491 +9,243 @@ using System.Windows.Forms;
 
 namespace ContextMenuManager.BluePointLilac.Controls
 {
-    // 一个支持圆角、动画和深色模式的 ComboBox 控件。
-    public unsafe partial class RComboBox : ComboBox
+    public sealed partial class RComboBox : ComboBox
     {
         #region Fields
-
-        // State
-        private int originalSelectedIndex = -1;
-        private bool mouseOverDropDown = false;
-        private bool focused = false;
-
-        // Animation
-        private readonly Timer animTimer;
-        private float borderWidth = 1.2f;
-        private float targetWidth = 1.2f;
-        private Color currentBorder;
-        private Color targetBorder;
-        private int animatedIndex = -1;
-        private int previousAnimatedIndex = -1;
-        private float hoverProgress = 0f;
-
-        // Style
-        [DefaultValue(8)]
-        [Category("Style")]
-        public int BorderRadius { get; set; } = 8;
-
-        // Win32
-        private IntPtr dropDownHwnd = IntPtr.Zero;
-
+        private int _originalSelectedIndex = -1;
+        private bool _mouseOverDropDown, _focused;
+        private readonly Timer _animTimer;
+        private float _borderWidth = 1.2f, _targetWidth = 1.2f, _hoverProgress;
+        private Color _currentBorder, _targetBorder;
+        private int _animatedIndex = -1, _previousAnimatedIndex = -1;
+        private IntPtr _dropDownHwnd;
         #endregion
 
         #region Properties
+        [DefaultValue(8), Category("Style")]
+        public int BorderRadius { get; set; } = 8;
 
-        private Color hoverColor = Color.FromArgb(255, 145, 60);
-        // 获取或设置鼠标悬停时控件的边框颜色。
-        [DefaultValue(typeof(Color), "255, 145, 60")]
+        private Color _hoverColor = Color.FromArgb(255, 145, 60);
+        [DefaultValue(typeof(Color), "255, 145, 60"), Category("Style")]
         public Color HoverColor
         {
-            get => hoverColor;
-            set
-            {
-                hoverColor = value;
-                DropDownHoverColor = value;
-            }
+            get => _hoverColor;
+            set { _hoverColor = value; DropDownHoverColor = value; }
         }
 
-        private Color focusColor = Color.FromArgb(255, 107, 0);
-        // 获取或设置控件获得焦点时的边框颜色。
-        [DefaultValue(typeof(Color), "255, 107, 0")]
+        private Color _focusColor = Color.FromArgb(255, 107, 0);
+        [DefaultValue(typeof(Color), "255, 107, 0"), Category("Style")]
         public Color FocusColor
         {
-            get => focusColor;
-            set
-            {
-                focusColor = value;
-                DropDownSelectedColor = value;
-            }
+            get => _focusColor;
+            set { _focusColor = value; DropDownSelectedColor = value; }
         }
 
-        // 获取或设置下拉箭头的颜色。
-        [DefaultValue(typeof(Color), "100, 100, 100")]
+        [DefaultValue(typeof(Color), "100, 100, 100"), Category("Style")]
         public Color ArrowColor { get; set; } = Color.FromArgb(100, 100, 100);
 
-        // 获取或设置是否根据内容自动调整控件宽度。
         [DefaultValue(true)]
         public new bool AutoSize { get; set; } = true;
 
-        // 获取或设置控件的最小宽度。
-        [DefaultValue(120)]
-        private int minWidth = 120;
-        public int MinWidth
-        {
-            get => minWidth.DpiZoom();
-            set => minWidth = value;
-        }
+        private int _minWidth = 120;
+        [DefaultValue(120), Category("Style")]
+        public int MinWidth { get => _minWidth.DpiZoom(); set => _minWidth = value; }
 
-        // 获取或设置控件的最大宽度。
-        [DefaultValue(400)]
-        private int maxWidth = 400;
-        public int MaxWidth
-        {
-            get => maxWidth.DpiZoom();
-            set => maxWidth = value;
-        }
+        private int _maxWidth = 400;
+        [DefaultValue(400), Category("Style")]
+        public int MaxWidth { get => _maxWidth.DpiZoom(); set => _maxWidth = value; }
 
-        // 获取或设置文本与控件边缘的内边距。
-        [DefaultValue(50)]
-        private int textPadding = 5;
-        public int TextPadding
-        {
-            get => textPadding.DpiZoom();
-            set => textPadding = value;
-        }
+        private int _textPadding = 5;
+        [DefaultValue(5), Category("Style")]
+        public int TextPadding { get => _textPadding.DpiZoom(); set => _textPadding = value; }
 
-        #endregion
-
-        #region DropDown Properties
-
-        // 获取或设置下拉列表中各项的高度。
-        [Category("DropDown"), Description("下拉列表中各项的高度")]
-        [DefaultValue(32)]
+        [Category("DropDown"), DefaultValue(32)]
         public int DropDownItemHeight { get; set; } = 32;
 
-        // 获取或设置下拉列表各项的字体。
-        [Category("DropDown"), Description("下拉列表各项的字体")]
-        [DefaultValue(null)]
+        [Category("DropDown")]
         public Font DropDownFont { get; set; }
 
-        // 获取或设置下拉列表鼠标悬停项的背景色。
-        [Category("DropDown"), Description("下拉列表鼠标悬停项的背景色")]
+        [Category("DropDown")]
         public Color DropDownHoverColor { get; set; }
 
-        // 获取或设置下拉列表鼠标悬停项的文字色。
-        [Category("DropDown"), Description("下拉列表鼠标悬停项的文字色")]
-        [DefaultValue(typeof(Color), "White")]
+        [Category("DropDown"), DefaultValue(typeof(Color), "White")]
         public Color DropDownHoverForeColor { get; set; } = Color.White;
 
-        // 获取或设置下拉列表选中项的背景色。
-        [Category("DropDown"), Description("下拉列表选中项的背景色")]
+        [Category("DropDown")]
         public Color DropDownSelectedColor { get; set; }
 
-        // 获取或设置下拉列表选中项的文字色。
-        [Category("DropDown"), Description("下拉列表选中项的文字色")]
-        [DefaultValue(typeof(Color), "White")]
+        [Category("DropDown"), DefaultValue(typeof(Color), "White")]
         public Color DropDownSelectedForeColor { get; set; } = Color.White;
 
-        // 获取或设置下拉列表各项的文字色。
-        [Category("DropDown"), Description("下拉列表各项的文字色")]
+        [Category("DropDown")]
         public Color DropDownForeColor { get; set; }
-
         #endregion
 
-        public void AutosizeDropDownWidth()
-        {
-            var maxWidth = 0;
-            foreach (var item in Items)
-            {
-                var width = TextRenderer.MeasureText(item.ToString(), Font).Width;
-                if (width > maxWidth)
-                {
-                    maxWidth = width;
-                }
-            }
-            DropDownWidth = maxWidth + SystemInformation.VerticalScrollBarWidth;
-        }
-
-        // 处理控件的构造和样式设置。
         public RComboBox()
         {
-            SetStyle(ControlStyles.AllPaintingInWmPaint |
-                    ControlStyles.UserPaint |
-                    ControlStyles.ResizeRedraw |
-                    ControlStyles.OptimizedDoubleBuffer, true);
-
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                     ControlStyles.ResizeRedraw | ControlStyles.OptimizedDoubleBuffer, true);
             DrawMode = DrawMode.OwnerDrawVariable;
             DropDownStyle = ComboBoxStyle.DropDownList;
             FlatStyle = FlatStyle.Flat;
             Height = 32.DpiZoom();
-
-            animTimer = new Timer { Interval = 16 };
+            _animTimer = new Timer { Interval = 16 };
             InitEvents();
         }
 
-        // 初始化所有事件订阅。
         private void InitEvents()
         {
             DarkModeHelper.ThemeChanged += OnThemeChanged;
-
-            GotFocus += (s, e) => { focused = true; UpdateState(); };
-            LostFocus += (s, e) => { focused = false; UpdateState(); };
+            GotFocus += (s, e) => { _focused = true; UpdateState(); };
+            LostFocus += (s, e) => { _focused = false; UpdateState(); };
             MouseEnter += (s, e) => UpdateState();
-            MouseLeave += (s, e) => { mouseOverDropDown = false; UpdateState(); };
+            MouseLeave += (s, e) => { _mouseOverDropDown = false; UpdateState(); };
             MouseMove += (s, e) => UpdateDropDownHoverState(e.Location);
-            MouseDown += RComboBox_MouseDown;
-
+            MouseDown += (s, e) => { if (e.Button == MouseButtons.Left && !DroppedDown) { if (!Focused) Focus(); DroppedDown = true; } };
             SelectedIndexChanged += (s, e) => { if (AutoSize) AdjustWidth(); };
             TextChanged += (s, e) => { if (AutoSize) AdjustWidth(); };
-
-            DropDown += RComboBox_DropDown;
-            DropDownClosed += (s, e) => {
-                originalSelectedIndex = animatedIndex = previousAnimatedIndex = -1;
-                dropDownHwnd = IntPtr.Zero;
-            };
-
-            animTimer.Tick += AnimTimer_Tick;
-            animTimer.Start();
+            DropDown += OnDropDown;
+            DropDownClosed += (s, e) => { _originalSelectedIndex = _animatedIndex = _previousAnimatedIndex = -1; _dropDownHwnd = IntPtr.Zero; };
+            _animTimer.Tick += OnAnimTick;
+            _animTimer.Start();
         }
 
-        // 处理鼠标按下事件以打开下拉列表。
-        private void RComboBox_MouseDown(object sender, MouseEventArgs e)
+        private void OnAnimTick(object s, EventArgs e)
         {
-            if (e.Button == MouseButtons.Left && !DroppedDown)
-            {
-                // 确保控件获得焦点
-                if (!Focused)
-                {
-                    Focus();
-                }
-                // 打开下拉列表
-                DroppedDown = true;
-            }
-        }
-
-        // 动画计时器的 Tick 事件处理程序，用于更新边框和下拉项的动画效果。
-        private void AnimTimer_Tick(object sender, EventArgs e)
-        {
-            if (IsDisposed)
-            {
-                animTimer.Stop();
-                return;
-            }
-
-            var needsRedraw = false;
-            if (Math.Abs(borderWidth - targetWidth) > 0.01f)
-            {
-                borderWidth += (targetWidth - borderWidth) * 0.3f;
-                needsRedraw = true;
-            }
-            if (currentBorder != targetBorder)
-            {
-                currentBorder = ColorLerp(currentBorder, targetBorder, 0.25f);
-                needsRedraw = true;
-            }
-            if (needsRedraw) Invalidate();
-
+            if (IsDisposed) { _animTimer.Stop(); return; }
+            bool redraw = false;
+            if (Math.Abs(_borderWidth - _targetWidth) > 0.01f) { _borderWidth += (_targetWidth - _borderWidth) * 0.3f; redraw = true; }
+            if (_currentBorder != _targetBorder) { _currentBorder = ColorLerp(_currentBorder, _targetBorder, 0.25f); redraw = true; }
+            if (redraw) Invalidate();
             UpdateDropDownAnimation();
         }
 
-        // 更新下拉列表项的悬停动画状态。
-        private void UpdateDropDownAnimation()
+        private void OnDropDown(object s, EventArgs e)
         {
-            if (DroppedDown && dropDownHwnd != IntPtr.Zero)
+            _originalSelectedIndex = SelectedIndex;
+            DropDownHeight = Items.Count * DropDownItemHeight.DpiZoom() + 2 * SystemInformation.BorderSize.Height;
+            if (Parent?.FindForm() is not Form form) return;
+            form.BeginInvoke(() =>
             {
-                GetCursorPos(out var p);
-                var r = new RECT();
-                GetWindowRect(dropDownHwnd, ref r);
-                var dropDownRect = new Rectangle(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
-
-                var hoverIndex = -1;
-                if (dropDownRect.Contains(p.X, p.Y))
+                try
                 {
-                    hoverIndex = (p.Y - dropDownRect.Top) / DropDownItemHeight.DpiZoom();
-                    if (hoverIndex < 0 || hoverIndex >= Items.Count || hoverIndex == originalSelectedIndex)
-                    {
-                        hoverIndex = -1;
-                    }
+                    if (IsDisposed || !IsHandleCreated) return;
+                    var cbi = new COMBOBOXINFO { cbSize = Marshal.SizeOf<COMBOBOXINFO>() };
+                    if (!GetComboBoxInfo(Handle, ref cbi) || cbi.hwndList == IntPtr.Zero) return;
+                    _dropDownHwnd = cbi.hwndList;
+                    if (!GetWindowRect(cbi.hwndList, out RECT rect)) return;
+                    var hrgn = CreateRoundRectRgn(0, 0, rect.Right - rect.Left, rect.Bottom - rect.Top, BorderRadius.DpiZoom(), BorderRadius.DpiZoom());
+                    if (hrgn != IntPtr.Zero && SetWindowRgn(cbi.hwndList, hrgn, true) == 0) DeleteObject(hrgn);
                 }
-
-                if (animatedIndex != hoverIndex)
-                {
-                    previousAnimatedIndex = animatedIndex;
-                    animatedIndex = hoverIndex;
-                    hoverProgress = 0f;
-                }
-            }
-            else
-            {
-                if (animatedIndex != -1)
-                {
-                    previousAnimatedIndex = animatedIndex;
-                    animatedIndex = -1;
-                    hoverProgress = 0f;
-                }
-            }
-
-            if (hoverProgress < 1f)
-            {
-                hoverProgress += 0.1f;
-                if (hoverProgress > 1f) hoverProgress = 1f;
-
-                if (dropDownHwnd != IntPtr.Zero)
-                {
-                    InvalidateRect(dropDownHwnd, IntPtr.Zero, true);
-                }
-            }
-            else
-            {
-                previousAnimatedIndex = -1;
-            }
+                catch { }
+            });
         }
 
-        // 测量下拉列表中项的大小。
+        private void UpdateDropDownAnimation()
+        {
+            if (DroppedDown && _dropDownHwnd != IntPtr.Zero) UpdateHoverIndex();
+            else if (_animatedIndex != -1) { _previousAnimatedIndex = _animatedIndex; _animatedIndex = -1; _hoverProgress = 0; }
+            if (_hoverProgress < 1f)
+            {
+                _hoverProgress = Math.Min(1f, _hoverProgress + 0.1f);
+                if (_dropDownHwnd != IntPtr.Zero) InvalidateRect(_dropDownHwnd, IntPtr.Zero, true);
+            }
+            else _previousAnimatedIndex = -1;
+        }
+
+        private void UpdateHoverIndex()
+        {
+            GetCursorPos(out POINT pt);
+            GetWindowRect(_dropDownHwnd, out RECT rc);
+            var rect = new Rectangle(rc.Left, rc.Top, rc.Right - rc.Left, rc.Bottom - rc.Top);
+            int idx = -1;
+            if (rect.Contains(pt.X, pt.Y))
+            {
+                idx = (pt.Y - rect.Top) / DropDownItemHeight.DpiZoom();
+                if (idx < 0 || idx >= Items.Count || idx == _originalSelectedIndex) idx = -1;
+            }
+            if (_animatedIndex != idx) { _previousAnimatedIndex = _animatedIndex; _animatedIndex = idx; _hoverProgress = 0; }
+        }
+
         protected override void OnMeasureItem(MeasureItemEventArgs e)
         {
             base.OnMeasureItem(e);
             e.ItemHeight = DropDownItemHeight.DpiZoom();
         }
 
-        // 在下拉列表打开时触发，设置下拉列表的高度和圆角。
-        private void RComboBox_DropDown(object sender, EventArgs e)
-        {
-            originalSelectedIndex = SelectedIndex;
-            DropDownHeight = Items.Count * DropDownItemHeight.DpiZoom() + 2 * SystemInformation.BorderSize.Height;
-
-            if (Parent.FindForm() is Form form)
-                form.BeginInvoke(() =>
-                {
-                    try
-                    {
-                        // 验证控件句柄是否有效
-                        if (IsDisposed || !IsHandleCreated) return;
-
-                        var cbi = new COMBOBOXINFO { cbSize = Marshal.SizeOf<COMBOBOXINFO>() };
-                        if (!GetComboBoxInfo(Handle, ref cbi)) return;
-                        
-                        // 验证下拉窗口句柄是否有效
-                        if (cbi.hwndList == IntPtr.Zero) return;
-                        
-                        dropDownHwnd = cbi.hwndList;
-                        var r = new RECT();
-                        if (!GetWindowRect(cbi.hwndList, ref r)) return;
-                        
-                        var h = CreateRoundRectRgn(0, 0, r.Right - r.Left, r.Bottom - r.Top, BorderRadius.DpiZoom(), BorderRadius.DpiZoom());
-                        if (h == IntPtr.Zero) return;
-                        
-                        // SetWindowRgn 在成功时会接管 region 句柄的所有权，失败时需要手动删除
-                        if (SetWindowRgn(cbi.hwndList, h, true) == 0)
-                        {
-                            DeleteObject(h);
-                        }
-                    }
-                    catch (Exception ex) when (ex is Win32Exception or ObjectDisposedException or InvalidOperationException)
-                    {
-                        // 静默捕获预期的异常，防止 ExecutionEngineException 导致程序崩溃
-                        // 如果设置圆角失败，下拉列表将使用默认的矩形样式
-                    }
-                });
-        }
-
-        // 自定义绘制下拉列表中的每个项。
         protected override void OnDrawItem(DrawItemEventArgs e)
         {
             if (e.Index < 0) return;
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-
-            var bounds = e.Bounds;
-            bool isActuallySelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected ||
-                                      (DroppedDown && animatedIndex == -1 && e.Index == originalSelectedIndex);
-
-            var textFont = DropDownFont ?? Font;
-            var textColor = DropDownForeColor;
-
-            var backColor = BackColor;
-            if (e.Index == animatedIndex)
-            {
-                backColor = ColorLerp(BackColor, DropDownHoverColor, hoverProgress);
-                textColor = ColorLerp(DropDownForeColor, DropDownHoverForeColor, hoverProgress);
-            }
-            else if (e.Index == previousAnimatedIndex)
-            {
-                backColor = ColorLerp(DropDownHoverColor, BackColor, hoverProgress);
-                textColor = ColorLerp(DropDownHoverForeColor, DropDownForeColor, hoverProgress);
-            }
-            else if (isActuallySelected)
-            {
-                backColor = DropDownSelectedColor;
-                textColor = DropDownSelectedForeColor;
-            }
-
-            using (var backBrush = new SolidBrush(backColor))
-            {
-                Rectangle highlightBounds = new(bounds.X + 2, bounds.Y + 2, bounds.Width - 4, bounds.Height - 4);
-                using var path = DarkModeHelper.CreateRoundedRectanglePath(highlightBounds, 4);
-                e.Graphics.FillPath(backBrush, path);
-            }
-
-            var text = GetItemText(Items[e.Index]);
-            Rectangle textBounds = new(bounds.Left + TextPadding, bounds.Top, bounds.Width - TextPadding * 2, bounds.Height);
-            TextRenderer.DrawText(e.Graphics, text, textFont, textBounds, textColor,
-                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected ||
+                            (DroppedDown && _animatedIndex == -1 && e.Index == _originalSelectedIndex);
+            var (back, fore) = GetItemColors(e.Index, selected);
+            using (var brush = new SolidBrush(back))
+            using (var path = DarkModeHelper.CreateRoundedRectanglePath(new Rectangle(e.Bounds.X + 2, e.Bounds.Y + 2, e.Bounds.Width - 4, e.Bounds.Height - 4), 4))
+                e.Graphics.FillPath(brush, path);
+            TextRenderer.DrawText(e.Graphics, GetItemText(Items[e.Index]), DropDownFont ?? Font,
+                new Rectangle(e.Bounds.Left + TextPadding, e.Bounds.Top, e.Bounds.Width - TextPadding * 2, e.Bounds.Height),
+                fore, TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
         }
 
-        #region Win32
-
-        // 检索光标在屏幕坐标中的位置。
-        // lpPoint: 指向 POINT 结构的指针，该结构接收光标的屏幕坐标。
-        // returns: 如果函数成功，则返回非零值。
-        [LibraryImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static partial bool GetCursorPos(out POINT lpPoint);
-
-        // 定义一个点的 x 和 y 坐标。
-        [StructLayout(LayoutKind.Sequential)]
-        public struct POINT
+        private (Color Back, Color Fore) GetItemColors(int index, bool selected)
         {
-            public int X;
-            public int Y;
+            if (index == _animatedIndex) return (ColorLerp(BackColor, DropDownHoverColor, _hoverProgress), ColorLerp(DropDownForeColor, DropDownHoverForeColor, _hoverProgress));
+            if (index == _previousAnimatedIndex) return (ColorLerp(DropDownHoverColor, BackColor, _hoverProgress), ColorLerp(DropDownHoverForeColor, DropDownForeColor, _hoverProgress));
+            if (selected) return (DropDownSelectedColor, DropDownSelectedForeColor);
+            return (BackColor, DropDownForeColor);
         }
 
-        // 定义一个矩形的左上角和右下角的坐标。
-        [StructLayout(LayoutKind.Sequential)]
-        internal struct RECT
+        protected override void OnPaint(PaintEventArgs e)
         {
-            public int Left;
-            public int Top;
-            public int Right;
-            public int Bottom;
-        }
-
-        // 包含有关组合框的信息。
-        [StructLayout(LayoutKind.Sequential)]
-        internal struct COMBOBOXINFO
-        {
-            public int cbSize;
-            public RECT rcItem;
-            public RECT rcButton;
-            public int stateButton;
-            public IntPtr hwndCombo;
-            public IntPtr hwndItem;
-            public IntPtr hwndList;
-        }
-
-        #endregion
-
-
-
-
-        private static Color ColorLerp(Color c1, Color c2, float t) => Color.FromArgb(
-            (int)(c1.A + (c2.A - c1.A) * t), (int)(c1.R + (c2.R - c1.R) * t),
-            (int)(c1.G + (c2.G - c1.G) * t), (int)(c1.B + (c2.B - c1.B) * t));
-
-        // 当系统主题（深色/浅色模式）更改时，更新控件的颜色。
-        public void UpdateColors()
-        {
-            if (IsDisposed) return;
-
-            SafeInvoke(() =>
+            base.OnPaint(e);
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.Clear(Parent?.BackColor ?? SystemColors.Control);
+            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+            using (var path = DarkModeHelper.CreateRoundedRectanglePath(rect, BorderRadius.DpiZoom()))
             {
-                BackColor = DarkModeHelper.ComboBoxBack;
-                ForeColor = DarkModeHelper.ComboBoxFore;
-                DropDownForeColor = DarkModeHelper.IsDarkTheme ? Color.White : Color.Black;
-                currentBorder = targetBorder = DarkModeHelper.ComboBoxBorder;
-                ArrowColor = DarkModeHelper.ComboBoxArrow;
-                DropDownHoverColor = DarkModeHelper.ComboBoxHover;
-                DropDownSelectedColor = DarkModeHelper.ComboBoxSelected;
-                HoverColor = DarkModeHelper.MainColor;
-                FocusColor = DarkModeHelper.MainColor;
-            });
+                using (var brush = new SolidBrush(BackColor)) g.FillPath(brush, path);
+                using (var pen = new Pen(_currentBorder, _borderWidth)) g.DrawPath(pen, path);
+            }
+            var btnRect = GetDropDownButtonRect();
+            var text = string.IsNullOrEmpty(Text) && SelectedItem != null ? GetItemText(SelectedItem) : Text;
+            TextRenderer.DrawText(g, text, Font, new Rectangle(TextPadding, 0, Width - btnRect.Width - TextPadding * 2, Height),
+                ForeColor, TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+            var c = new Point(btnRect.Left + btnRect.Width / 2, btnRect.Top + btnRect.Height / 2);
+            int s = 6.DpiZoom();
+            using (var brush = new SolidBrush(_mouseOverDropDown || _focused ? FocusColor : ArrowColor))
+                g.FillPolygon(brush, new[] { new Point(c.X - s, c.Y - s / 2), new Point(c.X + s, c.Y - s / 2), new Point(c.X, c.Y + s / 2) });
         }
 
-        // 根据控件的焦点和鼠标悬停状态更新边框的外观。
         private void UpdateState()
         {
-            bool hover = mouseOverDropDown || ClientRectangle.Contains(PointToClient(MousePosition));
-            targetBorder = focused ? FocusColor : (hover ? HoverColor : DarkModeHelper.ComboBoxBorder);
-            targetWidth = focused || hover ? 2f : 1.2f;
+            bool hover = _mouseOverDropDown || ClientRectangle.Contains(PointToClient(MousePosition));
+            _targetBorder = _focused ? FocusColor : (hover ? HoverColor : DarkModeHelper.ComboBoxBorder);
+            _targetWidth = _focused || hover ? 2f : 1.2f;
             Invalidate();
         }
 
-        // 更新下拉按钮的悬停状态，并相应地更改光标。
-        private void UpdateDropDownHoverState(Point location)
+        private void UpdateDropDownHoverState(Point loc)
         {
-            bool hover = GetDropDownButtonRect().Contains(location);
-            if (mouseOverDropDown == hover) return;
-            mouseOverDropDown = hover;
+            bool hover = GetDropDownButtonRect().Contains(loc);
+            if (_mouseOverDropDown == hover) return;
+            _mouseOverDropDown = hover;
             Cursor = hover ? Cursors.Hand : Cursors.Default;
             UpdateState();
         }
 
-        // 获取下拉按钮的矩形区域。
-        private Rectangle GetDropDownButtonRect()
-        {
-            int w = SystemInformation.HorizontalScrollBarArrowWidth + 8.DpiZoom();
-            return new Rectangle(ClientRectangle.Right - w, ClientRectangle.Top, w, ClientRectangle.Height);
-        }
+        private Rectangle GetDropDownButtonRect() => new(ClientRectangle.Right - (SystemInformation.HorizontalScrollBarArrowWidth + 8.DpiZoom()),
+            ClientRectangle.Top, SystemInformation.HorizontalScrollBarArrowWidth + 8.DpiZoom(), ClientRectangle.Height);
 
-        // 根据当前选择的项或文本内容调整控件的宽度。
         private void AdjustWidth()
         {
             if (!AutoSize) return;
-
-            int newWidth;
-            if (Items.Count == 0 && string.IsNullOrEmpty(Text))
-            {
-                newWidth = MinWidth;
-            }
-            else
-            {
-                var textToMeasure = string.IsNullOrEmpty(Text) ? GetItemText(SelectedItem) : Text;
-                newWidth = TextRenderer.MeasureText(textToMeasure, Font).Width + TextPadding + GetDropDownButtonRect().Width;
-            }
-
-            Width = Math.Max(MinWidth, Math.Min(MaxWidth, newWidth));
+            int w = Items.Count == 0 && string.IsNullOrEmpty(Text) ? MinWidth :
+                TextRenderer.MeasureText(string.IsNullOrEmpty(Text) ? GetItemText(SelectedItem) : Text, Font).Width + TextPadding * 2 + GetDropDownButtonRect().Width;
+            Width = Math.Max(MinWidth, Math.Min(MaxWidth, w));
         }
 
-        // 在控件首次创建时调整宽度。
         protected override void OnCreateControl()
         {
             base.OnCreateControl();
@@ -501,106 +253,67 @@ namespace ContextMenuManager.BluePointLilac.Controls
             UpdateColors();
         }
 
-        // 当字体更改时调整宽度。
         protected override void OnFontChanged(EventArgs e)
         {
             base.OnFontChanged(e);
             if (AutoSize) AdjustWidth();
         }
 
-        // 处理主题更改事件，更新控件颜色。
-        private void OnThemeChanged(object sender, EventArgs e) => UpdateColors();
-
-        // 释放资源。
-        protected override void Dispose(bool disposing)
+        public void UpdateColors()
         {
-            if (disposing)
+            if (IsDisposed) return;
+            SafeInvoke(() =>
             {
-                DarkModeHelper.ThemeChanged -= OnThemeChanged;
-                animTimer?.Dispose();
-            }
-            base.Dispose(disposing);
-        }
-
-        // 自定义绘制控件。
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            base.OnPaint(e);
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-
-            using var pen = new Pen(currentBorder, borderWidth);
-            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-            using var path = DarkModeHelper.CreateRoundedRectanglePath(rect, BorderRadius.DpiZoom());
-            e.Graphics.Clear(Parent.BackColor);
-
-            using (var brush = new SolidBrush(BackColor))
-            {
-                e.Graphics.FillPath(brush, path);
-            }
-
-            // 绘制边框
-            e.Graphics.DrawPath(pen, path);
-
-            // 绘制文本
-            var text = Text;
-            if (string.IsNullOrEmpty(text) && SelectedItem != null)
-            {
-                text = GetItemText(SelectedItem);
-            }
-            Rectangle textRect = new(TextPadding, 0, Width - GetDropDownButtonRect().Width - TextPadding, Height);
-            TextRenderer.DrawText(e.Graphics, text, Font, textRect, ForeColor,
-                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
-
-            // 绘制箭头
-            var btnRect = GetDropDownButtonRect();
-            var center = new Point(btnRect.Left + btnRect.Width / 2, btnRect.Top + btnRect.Height / 2);
-            int s = 6.DpiZoom();
-            using var arrowBrush = new SolidBrush(mouseOverDropDown || focused ? FocusColor : ArrowColor);
-            e.Graphics.FillPolygon(arrowBrush, new Point[] {
-                new(center.X - s, center.Y - s / 2),
-                new(center.X + s, center.Y - s / 2),
-                new(center.X, center.Y + s / 2)
+                BackColor = DarkModeHelper.ComboBoxBack;
+                ForeColor = DarkModeHelper.ComboBoxFore;
+                DropDownForeColor = DarkModeHelper.IsDarkTheme ? Color.White : Color.Black;
+                _currentBorder = _targetBorder = DarkModeHelper.ComboBoxBorder;
+                ArrowColor = DarkModeHelper.ComboBoxArrow;
+                DropDownHoverColor = DarkModeHelper.ComboBoxHover;
+                DropDownSelectedColor = DarkModeHelper.ComboBoxSelected;
+                HoverColor = FocusColor = DarkModeHelper.MainColor;
             });
         }
 
-        // 在 UI 线程上安全地执行操作。
+        private void OnThemeChanged(object s, EventArgs e) => UpdateColors();
+
         private void SafeInvoke(Action action)
         {
-            if (IsHandleCreated)
-                if (InvokeRequired) Invoke(action);
-                else action();
+            if (!IsHandleCreated) return;
+            if (InvokeRequired) Invoke(action); else action();
         }
-    }
 
-    // 包含 P/Invoke 方法的 RComboBox 类的部分。
-    public partial class RComboBox
-    {
-        // 使指定窗口的整个工作区无效。窗口将在下一次 `WM_PAINT` 消息时重绘。
-        [LibraryImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        internal static partial bool InvalidateRect(IntPtr hWnd, IntPtr lpRect, [MarshalAs(UnmanagedType.Bool)] bool bErase);
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) { DarkModeHelper.ThemeChanged -= OnThemeChanged; _animTimer?.Dispose(); }
+            base.Dispose(disposing);
+        }
 
-        // 获取有关指定组合框的信息。
-        [LibraryImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        internal static partial bool GetComboBoxInfo(IntPtr hwnd, ref COMBOBOXINFO pcbi);
+        private static Color ColorLerp(Color c1, Color c2, float t)
+        {
+            t = Math.Max(0f, Math.Min(1f, t));
+            return Color.FromArgb((int)(c1.A + (c2.A - c1.A) * t), (int)(c1.R + (c2.R - c1.R) * t),
+                                  (int)(c1.G + (c2.G - c1.G) * t), (int)(c1.B + (c2.B - c1.B) * t));
+        }
 
-        // 检索指定窗口的边框矩形的尺寸。
-        [LibraryImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        internal static partial bool GetWindowRect(IntPtr hwnd, ref RECT lpRect);
+        public void AutosizeDropDownWidth()
+        {
+            int max = 0;
+            foreach (var item in Items) max = Math.Max(max, TextRenderer.MeasureText(item?.ToString() ?? string.Empty, Font).Width);
+            DropDownWidth = max + SystemInformation.VerticalScrollBarWidth;
+        }
 
-        // 创建一个具有圆角的矩形区域。
-        [LibraryImport("gdi32.dll")]
-        internal static partial IntPtr CreateRoundRectRgn(int x1, int y1, int x2, int y2, int w, int h);
-
-        // 将窗口的窗口区域设置为特定区域。
-        [LibraryImport("user32.dll")]
-        internal static partial int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, [MarshalAs(UnmanagedType.Bool)] bool bRedraw);
-
-        // 删除 GDI 对象，释放系统资源。
-        [LibraryImport("gdi32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        internal static partial bool DeleteObject(IntPtr hObject);
+        #region Win32
+        [DllImport("user32.dll")] private static extern bool GetCursorPos(out POINT lpPoint);
+        [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RECT lpRect);
+        [DllImport("user32.dll")] private static extern bool InvalidateRect(IntPtr hWnd, IntPtr lpRect, bool bErase);
+        [DllImport("user32.dll")] private static extern bool GetComboBoxInfo(IntPtr hwnd, ref COMBOBOXINFO pcbi);
+        [DllImport("gdi32.dll")] private static extern IntPtr CreateRoundRectRgn(int x1, int y1, int x2, int y2, int w, int h);
+        [DllImport("user32.dll")] private static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
+        [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr hObject);
+        [StructLayout(LayoutKind.Sequential)] private struct POINT { public int X, Y; }
+        [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left, Top, Right, Bottom; }
+        [StructLayout(LayoutKind.Sequential)] private struct COMBOBOXINFO { public int cbSize; public RECT rcItem, rcButton; public int stateButton; public IntPtr hwndCombo, hwndItem, hwndList; }
+        #endregion
     }
 }
